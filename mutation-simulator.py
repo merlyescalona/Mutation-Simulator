@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Mutation-Simulator Version 2.0
+# Mutation-Simulator Version 2.1
 # Copyright (C) 2019 Marius Kühl
 
 # This program is free software: you can redistribute it and/or modify
@@ -34,7 +34,7 @@ import itertools
 def main():
 	"""The main function."""
 	start = timeit.default_timer()  # runtime
-	filename, rmt, mut_rates, mut_max_lengs, mut_block, assembly_name, species_name, it_rate, ignore_warnings, titv = utilise_sysargs()  # checks the commandline arguments
+	filename, rmt, mut_rates, mut_lengs, mut_block, assembly_name, species_name, it_rate, ignore_warnings, titv = utilise_sysargs()  # checks the commandline arguments
 	if not filename:
 		return False
 	fasta = read_fasta(filename)  # returns pyfaidx's fasta
@@ -47,7 +47,7 @@ def main():
 	else:
 		rmt, mut_flag, it_flag = None, None, None
 	if mut_rates or mut_flag:
-		if not mutator(fasta, fai, mut_rates, mut_max_lengs, mut_block, rmt, filename, assembly_name, species_name, titv):
+		if not mutator(fasta, fai, mut_rates, mut_lengs, mut_block, rmt, filename, assembly_name, species_name, titv):
 			return False
 		else:
 			filename="_mutated.".join(filename.split("."))
@@ -90,17 +90,17 @@ def read_fasta(filename):
 		return False
 
 
-def mutator(fasta, fai, mut_rates, mut_max_lengs, mut_block, rmt, filename, assembly_name, species_name, titv):
+def mutator(fasta, fai, mut_rates, mut_lengs, mut_block, rmt, filename, assembly_name, species_name, titv):
 	"""
 	Generates and implements mutations on a given Chromosome with rate or RMT information.
-	If rmt is given, mut_rates, mut_max_lengs and mut_block will be ignored. RMT must be set to False or None if it
+	If rmt is given, mut_rates, mut_lengs and mut_block will be ignored. RMT must be set to False or None if it
 	should not be used.
 
 	Parameters:
 		fasta (pyfaidx.Fasta): Chromosome information from any Fasta index file.
 		fai (pyfaidx.Faidx): Fasta index file content.
 		mut_rates (dict): All rates for all mutation types with 2 letter acronymes.
-		mut_rates (dict): All maximum mutation lengths for any type in the same format as mut_rates.
+		mut_lengs (dict): All mutation lengths settings for any type.
 		mut_block (dict): The range of the blocked area after any mutation for all types of mutations.
 		rmt (dict): The rmt information from load_rmt(). Can be None.
 		filename (str): Name of the Fasta file.
@@ -130,7 +130,7 @@ def mutator(fasta, fai, mut_rates, mut_max_lengs, mut_block, rmt, filename, asse
 				else:
 					no_tl_regions.append(range(rmt[i][0][n][0][0], rmt[i][0][n][0][1] + 1))
 		else:
-			mut_list, translocations, blocked_positions = get_mutations(0, len(fasta[chromosomes[i]])-1, mut_rates, mut_max_lengs, mut_block)
+			mut_list, translocations, blocked_positions = get_mutations(0, len(fasta[chromosomes[i]])-1, mut_rates, mut_lengs, mut_block)
 			if not mut_list:
 				return False
 		if translocations:
@@ -163,7 +163,7 @@ def utilise_sysargs():
 		filename (str): Name of the input Fasta file.
 		rmt_file (str): Name of the RMT file. Can be None.
 		mut_rates (dict): All rates for all mutation types with 2 letter acronymes.
-		mut_max_lengs (dict): All maximum mutation lengths for any type in the same format as mut_rates.
+		mut_lengs (dict): All mutation lengths settings for any mutation type.
 		mut_block (dict): The range of the blocked area after any mutation for all types of mutations.
 		assembly_name (str): Name of the assembly.
 		species_name (str): Name of the species.
@@ -172,32 +172,37 @@ def utilise_sysargs():
 		titv (float): Transition / Transversion ratio.
 	"""
 	parser = argparse.ArgumentParser("See https://github.com/mkpython3/Mutation-Simulator/blob/master/README.md for more information about this program.")
-	parser.add_argument("file", help="Fastafile to mutate")
+	parser.add_argument("file", help="Path to the reference Fasta file")
 	subparsers = parser.add_subparsers(help="Generate mutations or interchromosomal translocations via rmt or arguments")
 	parser_rmt = subparsers.add_parser("rmt", help="Use random mutation table instead of arguments")
-	parser_rmt.add_argument("rmtfile", help="The rmt file")
+	parser_rmt.add_argument("rmtfile", help="Path to the rmt file")
 	parser_rmt.add_argument("--ignore-warnings",help="Ignores RMT warnings.", action='store_true', default=False)
 	parser_args = subparsers.add_parser("args", help="Use commandline arguments for mutations instead of rmt")
-	parser_args.add_argument("-sn", "--snp", help="SNP rate", type=float, default=0)
-	parser_args.add_argument("-snb", "--snpblock", help="Amount of bases blocked after SNP", type=int, default=1)
-	parser_args.add_argument("-titv", "--transitionstransversions", help="Ratio of transitions:transversions likelihood", type=float, default=1)
-	parser_args.add_argument("-in", "--insert", help="Insert rate", type=float, default=0)
-	parser_args.add_argument("-inl", "--insertlength", help="Maximum length of inserts", type=int, default=2)
-	parser_args.add_argument("-inb", "--insertblock", help="Amount of bases blocked after insert", type=int, default=1)
-	parser_args.add_argument("-de", "--deletion", help="Deletion rate", type=float, default=0)
-	parser_args.add_argument("-del", "--deletionlength", help="Maximum length of deletions", type=int, default=2)
-	parser_args.add_argument("-deb", "--deletionblock", help="Amount of bases blocked after deletion", type=int, default=1)
-	parser_args.add_argument("-iv", "--inversion", help="Inversion rate", type=float, default=0)
-	parser_args.add_argument("-ivl", "--inversionlength", help="Maximum length of inversion", type=int, default=2)
-	parser_args.add_argument("-ivb", "--inversionblock", help="Amount of bases blocked after inversion", type=int, default=1)
-	parser_args.add_argument("-du", "--duplication", help="Duplication rate", type=float, default=0)
-	parser_args.add_argument("-dul", "--duplicationlength", help="Maximum length of duplications", type=int, default=2)
-	parser_args.add_argument("-dub", "--duplicationblock", help="Amount of bases blocked after duplication", type=int, default=1)
-	parser_args.add_argument("-tl", "--translocation", help="Translocation rate", type=float, default=0)
-	parser_args.add_argument("-tll", "--translocationlength", help="Maximum length of translocations", type=int, default=2)
-	parser_args.add_argument("-tlb", "--translocationblock", help="Amount of bases blocked after translocations", type=int, default=1)
-	parser_args.add_argument("-a", "--assembly", help="Assembly name for the VCF file", default="Unknown")
-	parser_args.add_argument("-s", "--species", help="Species name for the VCF file", default="Unknown")
+	parser_args.add_argument("-sn", "--snp", help="SNP rate. Default = 0", type=float, default=0)
+	parser_args.add_argument("-snb", "--snpblock", help="Amount of bases blocked after SNP. Default = 1", type=int, default=1)
+	parser_args.add_argument("-titv", "--transitionstransversions", help="Ratio of transitions:transversions likelihood. Default = 1", type=float, default=1)
+	parser_args.add_argument("-in", "--insert", help="Insert rate. Default = 0", type=float, default=0)
+	parser_args.add_argument("-inmin", "--insertminlength", help="Minimum length of inserts. Default = 1", type=int, default=1)
+	parser_args.add_argument("-inmax", "--insertmaxlength", help="Maximum length of inserts. Default = 2", type=int, default=2)
+	parser_args.add_argument("-inb", "--insertblock", help="Amount of bases blocked after insert. Default = 1", type=int, default=1)
+	parser_args.add_argument("-de", "--deletion", help="Deletion rate. Default = 0", type=float, default=0)
+	parser_args.add_argument("-demin", "--deletionminlength", help="Minimum length of deletions. Default = 1", type=int, default=1)
+	parser_args.add_argument("-demax", "--deletionmaxlength", help="Maximum length of deletions. Default = 2", type=int, default=2)
+	parser_args.add_argument("-deb", "--deletionblock", help="Amount of bases blocked after deletion. Default = 1", type=int, default=1)
+	parser_args.add_argument("-iv", "--inversion", help="Inversion rate. Default = 0", type=float, default=0)
+	parser_args.add_argument("-ivmin", "--inversionminlength", help="Minimum length of inversion. Default = 2", type=int, default=2)
+	parser_args.add_argument("-ivmax", "--inversionmaxlength", help="Maximum length of inversion. Default = 3", type=int, default=3)
+	parser_args.add_argument("-ivb", "--inversionblock", help="Amount of bases blocked after inversion. Default = 1", type=int, default=1)
+	parser_args.add_argument("-du", "--duplication", help="Duplication rate. Default = 0", type=float, default=0)
+	parser_args.add_argument("-dumin", "--duplicationminlength", help="Minimum length of duplications. Default = 1", type=int, default=1)
+	parser_args.add_argument("-dumax", "--duplicationmaxlength", help="Maximum length of duplications. Default = 2", type=int, default=2)
+	parser_args.add_argument("-dub", "--duplicationblock", help="Amount of bases blocked after duplication. Default = 1", type=int, default=1)
+	parser_args.add_argument("-tl", "--translocation", help="Translocation rate. Default = 0", type=float, default=0)
+	parser_args.add_argument("-tlmin", "--translocationminlength", help="Minimum length of translocations. Default = 1", type=int, default=1)
+	parser_args.add_argument("-tlmax", "--translocationmaxlength", help="Maximum length of translocations. Default = 2", type=int, default=2)
+	parser_args.add_argument("-tlb", "--translocationblock", help="Amount of bases blocked after translocations. Default = 1", type=int, default=1)
+	parser_args.add_argument("-a", "--assembly", help="Assembly name for the VCF file. Default = 'Unknown'", default="Unknown")
+	parser_args.add_argument("-s", "--species", help="Species name for the VCF file. Default = 'Unknown'", default="Unknown")
 	parser_it = subparsers.add_parser("it", help="Generate interchromosomal translocations via commandline")
 	parser_it.add_argument("interchromosomalrate", help="Rate of interchromosomal translocations.", type=float)
 	args = parser.parse_args()
@@ -205,7 +210,7 @@ def utilise_sysargs():
 	rmt_file = None
 	it_rate = None
 	mut_rates = {}
-	mut_max_lengs = {}
+	mut_lengs = {}
 	mut_block={}
 	titv = 1
 	ignore_warnings=False
@@ -214,12 +219,11 @@ def utilise_sysargs():
 	if not hasattr(args, "rmtfile") and not hasattr(args, "interchromosomalrate"):
 		mut_rates = {"sn": args.snp, "in": args.insert, "de": args.deletion, "iv": args.inversion,
 					 "du": args.duplication, "tl": args.translocation}
-		mut_max_lengs = {"in": args.insertlength, "de": args.deletionlength, "iv": args.inversionlength,
-						 "du": args.duplicationlength, "tl": args.translocationlength}
+		mut_lengs = {"min": {"in": args.insertminlength, "de": args.deletionminlength, "iv": args.inversionminlength, "du": args.duplicationminlength, "tl": args.translocationminlength}, "max":{"in": args.insertmaxlength, "de": args.deletionmaxlength, "iv": args.inversionmaxlength, "du": args.duplicationmaxlength, "tl": args.translocationmaxlength}}
 		mut_block = {"sn": args.snpblock, "in": args.insertblock, "de": args.deletionblock, "iv": args.inversionblock,
 					 "du": args.duplicationblock, "tl": args.translocationblock}
 		for key in mut_block.keys():
-			if mut_block[key] < 1: mut_block[key]=1 ; print("Block values were adjusted.")
+			if mut_block[key] < 1: mut_block[key]=1 ; print(f"{key} block values were adjusted to 1")
 		assembly_name = args.assembly
 		species_name = args.species
 		titv = args.transitionstransversions
@@ -228,7 +232,7 @@ def utilise_sysargs():
 	else:
 		rmt_file = args.rmtfile
 		ignore_warnings=args.ignore_warnings
-	return filename, rmt_file, mut_rates, mut_max_lengs, mut_block, assembly_name, species_name, it_rate, ignore_warnings, titv
+	return filename, rmt_file, mut_rates, mut_lengs, mut_block, assembly_name, species_name, it_rate, ignore_warnings, titv
 
 
 def save_mutations_vcf(filename, fasta, chromosome, mut_list, assembly, species, mode):
@@ -300,7 +304,7 @@ def save_mutations_vcf(filename, fasta, chromosome, mut_list, assembly, species,
 										   entry[1] - 1:entry[1]]) + "\t.\t.\tSVTYPE=" + svtype + ";END=" + str(
 						entry[2] + 1) + ";SVLEN=-" + str(entry[2] - entry[1] + 1) + "\tGT\t1\n")
 				else:
-					hndl.write(fasta[chromosome].name + "\t" + str(entry[2] + 2) + "\t.\t" + convert_ambiguous(str(
+					hndl.write(fasta[chromosome].name + "\t" + str(entry[2] + 1) + "\t.\t" + convert_ambiguous(str(
 						fasta[chromosome][0:entry[2] + 2])) + "\t" + convert_ambiguous(fasta[chromosome][
 										   entry[2] + 1]) + "\t.\t.\tSVTYPE=" + svtype + ";END=" + str(
 						entry[2] + 2) + ";SVLEN=-" + str(entry[2] - entry[1] + 1) + "\tGT\t1\n")
@@ -356,7 +360,7 @@ def convert_ambiguous(substring):
 		.replace("R", "A").replace("B", "C").replace("D", "A").replace("H", "A").replace("V", "A").replace("-", "N")
 
 
-def get_mutations(start, stop, mut_rates, mut_max_lengs, mut_block):
+def get_mutations(start, stop, mut_rates, mut_lengs, mut_block):
 	"""
 	Generates a list of mutations with translocations in a seperate list for a whole chromosome or RMT region.
 
@@ -366,7 +370,7 @@ def get_mutations(start, stop, mut_rates, mut_max_lengs, mut_block):
 		start (int): Startung position of the chromosome or region.
 		stop (int): Stop position of the chromosome or region.
 		mut_rates (dict): All rates for all mutation types with 2 letter acronymes.
-		mut_max_lengs (dict): All maximum mutation lengths for any type in the same format as mut_rates.
+		mut_lengs (dict): All mutation lengths settings for any mutation type.
 		mut_block (dict): The range of the blocked area after any mutation for all types of mutations.
 
 	Returns:
@@ -376,7 +380,7 @@ def get_mutations(start, stop, mut_rates, mut_max_lengs, mut_block):
 	"""
 	mut_type_chances, mut_rate = calc_mut_type_chances(mut_rates)
 	if not mut_type_chances:
-		return False
+		return False, False, False
 	mut_positions = get_mut_positions(start, stop, mut_rate)
 	mutations = []
 	blocked_positions = blist([])
@@ -385,35 +389,40 @@ def get_mutations(start, stop, mut_rates, mut_max_lengs, mut_block):
 	i=0
 	mut_types = [choice(mut_type_chances[0], p=mut_type_chances[1], size=len(mut_positions))]
 	while i < len(mut_positions):
-		mut = random_mutation_type(mut_positions[i], stop, mut_max_lengs, mut_types[0][i])
-		if mut:
-			mutations.append(mut)
-			if not mut[0]=="sn" and not mut[0] == "in":
-				mut_range = range(mut[1], mut[2] + mut_block[mut[0]] + 1)
-				if mut[0] == "tl":
-					translocations.append(mut)
-			else:
-				mut_range = range(mut[1], mut[1] + mut_block[mut[0]]+2)
-			blocked_positions=blocked_positions+list(mut_range)
-			flag = True
-			i_before=i
-			while flag:
-				if not mut_positions[i] in mut_range:
-					flag = False
+		if mut_positions[i] not in blocked_positions:
+			mut = random_mutation_type(mut_positions[i], stop, mut_lengs, mut_types[0][i])
+			if mut:
+				mutations.append(mut)
+				if not mut[0] in ["sn", "in"]:
+					mut_range = range(mut[1], mut[2] + mut_block[mut[0]] + 1)
+					if mut[0] == "tl":
+						translocations.append(mut)
 				else:
-					if i + 1 < len(mut_positions):
-						i += 1
+					mut_range = range(mut[1], mut[1] + mut_block[mut[0]] + 1)
+				blocked_positions=blocked_positions+blist(mut_range)
+				flag = True
+				i_before=i
+				while flag:
+					if not mut_positions[i] in mut_range:
 						flag = False
 					else:
-						i = len(mut_positions)
-						flag = False
-		elif mut == None:
+						if i + 1 < len(mut_positions):
+							i += 1
+							flag = False
+						else:
+							i = len(mut_positions)
+							flag = False
+			elif mut == None:
+				i+=1
+			elif mut == False:
+				return False, False, False
+			pbar.update(i-i_before)
+		else:
 			i+=1
-		elif mut == False:
-			return False
-		pbar.update(i-i_before)
+			pbar.update(1)
 	pbar.close()
 	blocked_positions=array(blocked_positions)
+	print(mutations)###
 	return mutations, translocations, blocked_positions
 
 
@@ -470,11 +479,10 @@ def get_trans_inserts(translocations, data_length, blocked_positions, no_tl_regi
 			trans_inserts.append(["tli", positions[i], translocations[i][1], translocations[i][2],
 								  transloc_invert((translocations[i][2] - translocations[i][1]) + 1)])
 	else:
-		positions = rnd.sample(set(range(0, data_length)) - blocked_positions,
-							   len(set(range(0, data_length)) - blocked_positions))
+		positions = rnd.sample(set(range(0, data_length)) - set(blocked_positions), len(set(range(0, data_length)) - set(blocked_positions)))
 		rnd.shuffle(translocations)
 		for i in trange(len(translocations), desc="Finding transloc inserts"):
-			if i < len(set(range(0, data_length)) - blocked_positions):
+			if i < len(set(range(0, data_length)) - set(blocked_positions)):
 				trans_inserts.append(["tli", positions[i], translocations[i][1], translocations[i][2],
 									  transloc_invert((translocations[i][2] - translocations[i][1]) + 1)])
 			else:
@@ -491,14 +499,14 @@ def get_mut_positions(start, stop, mut_rate):
 	return positions
 
 
-def random_mutation_type(start, data_length, mut_max_lengs, mut_type):
+def random_mutation_type(start, data_length, mut_lengs, mut_type):
 	"""
 	Assigns a stop value to a selected start value and mutation type.
 
 	Parameters:
 		start (int): Position of a mutation.
 		data_length (int): Length of the chromosome or region.
-		mut_max_lengs (dict): All maximum mutation lengths for any type in the same format as mut_rates.
+		mut_lengs (dict): All mutation length settings for any mutation type.
 		mut_type_chances (dict): Contains all chances for any mutation type with 2 letter acronymes.
 		mut_type (str): 2 Letter acronym for the mutation type.
 
@@ -506,23 +514,26 @@ def random_mutation_type(start, data_length, mut_max_lengs, mut_type):
 		mutation (list): A list containing a mutation type, a start value and if given a stop value.
 	"""
 	mutation = [mut_type]
-	if mutation[0]not in mut_max_lengs.keys():
+	if mutation[0] not in mut_lengs["min"].keys() or mutation[0] not in mut_lengs["max"].keys():
 		if not mutation[0]=="sn":
-			print("ERROR: "+mutation[0]+"l not defined")
+			print(f"ERROR: {mutation[0]} min/max length not defined")
 			return False
-	mutation.append(start)  # appends the start position to the mutation type list
-	if mutation[0] == "iv":  # needs a minimum mut_max_length of 2
-		if start + mut_max_lengs["iv"] >= data_length:
+	mutation.append(int(start))  # appends the start position to the mutation type list
+	if mutation[0] == "iv":  # needs a minimum length of 2
+		if start + mut_lengs["max"]["iv"] >= data_length:
 			return None  # if it cant fit at the end it will be skipped
-		stop = rnd.randint(start + 1, start + (mut_max_lengs["iv"] - 1))
+		stop = rnd.randint(start + mut_lengs["min"]["iv"] - 1, start + (mut_lengs["max"]["iv"] - 1))
+		mutation.append(stop)
+	elif mutation[0] == "in":
+		stop = rnd.randint(start + mut_lengs["min"][mutation[0]]-1, start + mut_lengs["max"][mutation[0]] - 1)
 		mutation.append(stop)
 	elif mutation[0] == "du":
-		stop = rnd.randint(start, start + mut_max_lengs[mutation[0]] - 1)
+		stop = rnd.randint(start + mut_lengs["min"][mutation[0]] - 1, start + mut_lengs["max"][mutation[0]] - 1)
 		if stop >= data_length - 1:
 			stop = data_length
 		mutation.append(stop)  # appends the stop position
-	elif not mutation[0] == "iv" and not mutation[0] == "sn" and not mutation[0] == "du":
-		stop = rnd.randint(start, start + mut_max_lengs[mutation[0]] - 1)
+	elif mutation[0] in ["tl", "de"]:
+		stop = rnd.randint(start + mut_lengs["min"][mutation[0]] - 1, start + mut_lengs["max"][mutation[0]] - 1)
 		if stop >= data_length - 1:
 			stop = data_length - 1
 		mutation.append(stop)  # appends the stop position
