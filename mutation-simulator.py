@@ -277,67 +277,51 @@ def save_mutations_vcf(filename, fasta, chromosome, mut_list, assembly, species,
 		too_long = []
 		for i in trange(len(mut_list), desc="Writing VCF"):
 			entry = mut_list[i]
+			#start, ref, alt, info = "", "", "", ""
 			if entry[0] == "sn":
-				hndl.write(
-					fasta[chromosome].name + "\t" + str(entry[1] + 1) + "\t.\t" + convert_ambiguous(fasta[chromosome][entry[1]:entry[1]+1][0]) + "\t" + convert_ambiguous(str(entry[2])) + "\t.\t.\t.\tGT\t1\n")
+				start, ref, alt, info = entry[1] + 1, convert_ambiguous(fasta[chromosome][entry[1]]), convert_ambiguous(entry[2]), "."
 			elif entry[0] == "in":
 				if entry[1] > 0:
-					hndl.write(
-						fasta[chromosome].name + "\t" + str(entry[1]) + "\t.\t" + convert_ambiguous(fasta[chromosome][entry[1] - 1:entry[1]]) + "\t" +
-						convert_ambiguous(fasta[chromosome][entry[1] - 1:entry[1]] + entry[3]) + "\t.\t.\tSVTYPE=INS;END=" + str(
-							entry[1]) + ";SVLEN=" + str(len(entry[3])) + "\tGT\t1\n")
+					start, ref, alt, info = entry[1], convert_ambiguous(fasta[chromosome][entry[1] - 1:entry[1]]), convert_ambiguous(fasta[chromosome][entry[1] - 1:entry[1]] + entry[3]), f"SVTYPE=INS;END={entry[1]};SVLEN={len(entry[3])}"
 				else:
-					hndl.write(
-						fasta[chromosome].name + "\t" + str(entry[1] + 1) + "\t.\t" + convert_ambiguous(fasta[chromosome][entry[1]]) + "\t" +
-						convert_ambiguous(entry[3] + fasta[chromosome][entry[1]]) + "\t.\t.\tSVTYPE=INS;END=" + str(
-							entry[1] + 1) + ";SVLEN=" + str(len(entry[3])) + "\tGT\t1\n")
+					start, ref, alt, info = entry[1] + 1, convert_ambiguous(fasta[chromosome][entry[1]]), convert_ambiguous(entry[3] + fasta[chromosome][entry[1]]), f"SVTYPE=INS;END={entry[1] + 1};SVLEN={len(entry[3])}"
 			elif entry[0] == "du":
-				hndl.write(fasta[chromosome].name + "\t" + str(entry[1] + 1) + "\t.\t" + convert_ambiguous(str(
-					fasta[chromosome][entry[1]:entry[2] + 1])) + "\t" + convert_ambiguous(str(fasta[chromosome][entry[1]:entry[2] + 1] +
-								   entry[3])) + "\t.\t.\tSVTYPE=DUP;END=" + str(
-					entry[1] + len(fasta[chromosome][entry[1]:entry[2] + 1])) + ";SVLEN=" + str(
-					len(entry[3])) + "\tGT\t1\n")
+				start, ref, alt, info = entry[1] + 1, convert_ambiguous(fasta[chromosome][entry[1]:entry[2] + 1]), convert_ambiguous(fasta[chromosome][entry[1]:entry[2] + 1] + entry[3]), f"SVTYPE=DUP;END={entry[1]+len(fasta[chromosome][entry[1]:entry[2]+1])};SVLEN={len(entry[3])}"
 			elif entry[0] == "de" or entry[0] == "tl":
 				if entry[0] == "de":
-					svtype = "DEL"
+					sv_type = "DEL"
 				else:
-					svtype = "DEL:ME"
+					sv_type = "DEL:ME"
 				if entry[1] > 0:
-					hndl.write(fasta[chromosome].name + "\t" + str(entry[1]) + "\t.\t" + convert_ambiguous(str(
-						fasta[chromosome][entry[1] - 1:entry[2] + 1])) + "\t" + convert_ambiguous(fasta[chromosome][
-										   entry[1] - 1:entry[1]]) + "\t.\t.\tSVTYPE=" + svtype + ";END=" + str(
-						entry[2] + 1) + ";SVLEN=-" + str(entry[2] - entry[1] + 1) + "\tGT\t1\n")
+					start, ref, alt, info = entry[1], convert_ambiguous(fasta[chromosome][entry[1] - 1:entry[2] + 1]), convert_ambiguous(fasta[chromosome][entry[1] - 1:entry[1]]),f"SVTYPE={sv_type};END={entry[2] + 1};SVLEN=-{entry[2] - entry[1] + 1}"
 				else:
-					hndl.write(fasta[chromosome].name + "\t" + str(entry[1] + 1) + "\t.\t" + convert_ambiguous(str(
-						fasta[chromosome][0:entry[2] + 2])) + "\t" + convert_ambiguous(fasta[chromosome][
-										   entry[2] + 1]) + "\t.\t.\tSVTYPE=" + svtype + ";END=" + str(
-						entry[2] + 2) + ";SVLEN=-" + str(entry[2] - entry[1] + 1) + "\tGT\t1\n")
+					start, ref, alt, info = entry[1] + 1, convert_ambiguous(fasta[chromosome][0:entry[2] + 2]), convert_ambiguous(fasta[chromosome][entry[2] + 1]), f"SVTYPE={sv_type};END={entry[2] + 2};SVLEN=-{entry[2] - entry[1] + 1}"
 			elif entry[0] == "iv":
 				if not str(fasta[chromosome][entry[1]:entry[2] + 1]) == str(entry[3][::-1]):
-					hndl.write(fasta[chromosome].name + "\t" + str(entry[1] + 1) + "\t.\t" + convert_ambiguous(str(
-						fasta[chromosome][entry[1]:entry[2] + 1])) + "\t" + convert_ambiguous(str(
-						entry[3][::-1])) + "\t.\t.\tSVTYPE=INV;END=" + str(entry[2] + 1) + ";SVLEN=0\tGT\t1\n")
+					start, ref, alt, info = entry[1] + 1, convert_ambiguous(fasta[chromosome][entry[1]:entry[2] + 1]), convert_ambiguous(entry[3][::-1]), f"SVTYPE=INV;END={entry[2] + 1};SVLEN=0"
+				else:
+					continue
 			elif entry[0] == "tli":
+				entry[1]=int(entry[1]) ###
 				if not entry[4]:  # check for transloc inversion
 					insert = str(entry[5])
 				else:
 					insert = str(entry[5][::-1])
 				if entry[1] > 0:
 					if entry[1] < len(fasta[chromosome]):
-						hndl.write(
-							fasta[chromosome].name + "\t" + str(entry[1]) + "\t.\t" + convert_ambiguous(fasta[chromosome][entry[1] - 1:entry[1]]) + "\t" +
-							convert_ambiguous(fasta[chromosome][entry[1] - 1:entry[1]] + insert) + "\t.\t.\tSVTYPE=INS:ME;END=" + str(
-								entry[1]) + ";SVLEN=" + str(len(insert)) + "\tGT\t1\n")
+						start, ref, alt, info = entry[1], convert_ambiguous(fasta[chromosome][entry[1] - 1:entry[1]]), convert_ambiguous(fasta[chromosome][entry[1] - 1:entry[1]] + insert), f"SVTYPE=INS:ME;END={entry[1]};SVLEN={len(insert)}"
 					else:
 						too_long.append(entry)
+						continue
 				else:
-					hndl.write(fasta[chromosome].name + "\t" + str(entry[1] + 1) + "\t.\t" + convert_ambiguous(fasta[chromosome][int(entry[1])]) + "\t" + convert_ambiguous(insert + fasta[chromosome][int(entry[1])]) + "\t.\t.\tSVTYPE=INS:ME;END=" + str(entry[1] + 1) + ";SVLEN=" + str(len(insert)) + "\tGT\t1\n")
+					start, ref, alt, info = entry[1] + 1, convert_ambiguous(fasta[chromosome][entry[1]]), convert_ambiguous(insert + fasta[chromosome][entry[1]]), f"SVTYPE=INS:ME;END={entry[1] + 1};SVLEN={len(insert)}"
+
+			hndl.write(f"{fasta[chromosome].name}\t{start}\t.\t{ref}\t{alt}\t.\t.\t{info}\tGT\t1\n")
+
 		too_long = fix_too_long(too_long)  # creates a single vcf-entry for every entry past the last base
 		if not too_long == "":
-			hndl.write(fasta[chromosome].name + "\t" + str(len(fasta[chromosome])) + "\t.\t" + convert_ambiguous(str(
-				fasta[chromosome][len(fasta[chromosome]) - 1])) + "\t" + convert_ambiguous(str(fasta[chromosome][len(fasta[chromosome]) - 1]) +
-							   too_long) + "\t.\t.\tSVTYPE=INS:ME;END=" + str(
-					len(fasta[chromosome]) + len(too_long)) + ";SVLEN=" + str(len(too_long)) + "\tGT\t1\n")
+			start, ref, alt, info = len(fasta[chromosome]), convert_ambiguous(fasta[chromosome][len(fasta[chromosome]) - 1]), convert_ambiguous(fasta[chromosome][len(fasta[chromosome]) - 1] + too_long),f"SVTYPE=INS:ME;END={len(fasta[chromosome]) + len(too_long)};SVLEN={len(too_long)}"
+			hndl.write(f"{fasta[chromosome].name}\t{start}\t.\t{ref}\t{alt}\t.\t.\t{info}\tGT\t1\n")
 	return
 
 
@@ -384,6 +368,8 @@ def get_mutations(start, stop, mut_rates, mut_lengs, mut_block):
 	if not mut_type_chances:
 		return False, False, False
 	mut_positions = get_mut_positions(start, stop, mut_rate)
+	if not mut_positions:
+		return False, False, False
 	mutations = []
 	blocked_positions = blist([])
 	translocations = []
@@ -439,7 +425,7 @@ def calc_mut_type_chances(mut_rates):
 			mut_type_chances[0].append(str(mut_rate))
 			mut_type_chances[1].append(float(mut_rates[mut_rate] / rate_sum))
 		except ZeroDivisionError:
-			print("ERROR: Sum of mutation rates =0")
+			print("ERROR: Sum of mutation rates = 0")
 			return False, False
 	must_haves = ["sn", "in", "de", "du", "iv", "tl"]
 	for mut_type in must_haves:  # add missing values
@@ -475,11 +461,11 @@ def get_trans_inserts(translocations, data_length, blocked_positions, no_tl_regi
 		positions = rnd.sample(set(range(0, data_length)) - set(blocked_positions), len(set(range(0, data_length)) - set(blocked_positions)))
 		rnd.shuffle(translocations)
 		for i in trange(len(translocations), desc="Finding transloc inserts"):
-			if i < len(set(range(0, data_length)) - set(blocked_positions)):
+			if i < len(positions):
 				trans_inserts.append(["tli", positions[i], translocations[i][1], translocations[i][2],
 									  transloc_invert((translocations[i][2] - translocations[i][1]) + 1)])
 			else:
-				data_length = data_length + 1
+				data_length += 1
 				trans_inserts.append(["tli", data_length, translocations[i][1], translocations[i][2],
 									  transloc_invert((translocations[i][2] - translocations[i][1]) + 1)])
 	return trans_inserts
@@ -488,7 +474,11 @@ def get_trans_inserts(translocations, data_length, blocked_positions, no_tl_regi
 def get_mut_positions(start, stop, mut_rate):
 	"""Returns a sorted set of all mutation starting points."""
 	mut_count = int(((stop - start) + 1) * mut_rate)
-	positions = sorted(choice(arange(start, stop + 1), mut_count, replace=False))
+	try:
+		positions = sorted(choice(arange(start, stop + 1), mut_count, replace=False))
+	except ValueError:
+		print("ERROR: Rates too high.")
+		positions = False
 	return positions
 
 
